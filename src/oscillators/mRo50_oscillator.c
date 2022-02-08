@@ -29,6 +29,7 @@
 #define MRO50_READ_TEMP		_IOR('M', 5, u32 *)
 #define MRO50_READ_CTRL		_IOR('M', 6, u32 *)
 #define MRO50_SAVE_COARSE	_IO('M', 7)
+#define ART_CALIBRATION_READ_PARAMETERS _IOR('M', 8, struct disciplining_parameters *)
 
 #endif /* MRO50_IOCTL_H */
 /*---------------------------------------------------------------------------*/
@@ -183,9 +184,10 @@ static int mRo50_oscillator_apply_output(struct oscillator *oscillator, struct o
 	} else if (output->action == ADJUST_COARSE) {
 		log_info("Coarse adjustment to value %d requested", output->setpoint);
 		command = MRO50_ADJUST_COARSE;
-	} else if (output->action == SAVE_COARSE) {
+	} else if (output->action == SAVE_DISCIPLINING_PARAMETERS) {
 		log_debug("Saving coarse value to mRO50 memory");
 		ioctl(mRo50->osc_fd, MRO50_SAVE_COARSE);
+		/*To Do save calibration parameters as well*/
 		return 0;
 	} else {
 		log_error("Calling mRo50_oscillator_apply_output with action different from ADJUST_COARSE or ADJUST_FINE");
@@ -283,6 +285,20 @@ clean_calibration:
 	return NULL;
 }
 
+static int mRo50_oscillator_get_disciplining_parameters(struct oscillator *oscillator, struct disciplining_parameters *disciplining_parameters)
+{
+	struct mRo50_oscillator *mRo50;
+	int ret;
+	mRo50 = container_of(oscillator, struct mRo50_oscillator, oscillator);
+
+	ret = ioctl(mRo50->osc_fd, ART_CALIBRATION_READ_PARAMETERS, disciplining_parameters);
+	if (ret != 0) {
+		log_error("Fail reading disciplining parameters, err %d", ret);
+		return -1;
+	}
+	return 0;
+}
+
 static const struct oscillator_factory mRo50_oscillator_factory = {
 	.class = {
 			.name = FACTORY_NAME,
@@ -291,6 +307,7 @@ static const struct oscillator_factory mRo50_oscillator_factory = {
 			.get_temp = mRO50_oscillator_get_temp,
 			.apply_output = mRo50_oscillator_apply_output,
 			.calibrate = mRo50_oscillator_calibrate,
+			.get_disciplining_parameters = mRo50_oscillator_get_disciplining_parameters,
 			.dac_min = MRO50_SETPOINT_MIN,
 			.dac_max = MRO50_SETPOINT_MAX,
 	},
